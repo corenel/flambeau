@@ -65,4 +65,4 @@ class BaseTrainer(BaseEngine):
 
     @abstractmethod
     def train(self):
-        raise NotImplementedError
+        pass

@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import pickle
@@ -31,6 +32,13 @@ def load_pickle(path):
     with open(path, 'rb') as f:
         obj = pickle.load(f)
     return obj
+
+
+def enable_cudnn_autotuner():
+    """
+    Enable cuDNN auto-tuner to accelerate convolution
+    """
+    torch.backends.cudnn.benchmark = True
 
 
 def manual_seed(seed):
@@ -85,6 +93,3 @@ def load_profile(filepath,
         hps.device.data = ['cuda:{}'.format(gpu)]
 
     return hps
-
-
-

@@ -1,9 +1,11 @@
+import os
 import re
+from abc import abstractmethod
 from functools import partial
 
 import torch
 
-from flambeau.misc import util
+from flambeau.misc import saver
 from flambeau.network import lr_scheduler
 from flambeau.network.optimizer import AdamW
 from .base_engine import BaseEngine
@@ -112,8 +114,9 @@ class BaseBuilder(BaseEngine):
         super().__init__(verbose)
         self.hps = hps
 
+    @abstractmethod
     def build(self):
-        raise NotImplementedError
+        pass
 
     def _make_optimizer(self, model,
                         optimizer_name=None,
@@ -206,3 +209,44 @@ class BaseBuilder(BaseEngine):
             devices_to_string(data_device)))
 
         return devices, data_device
+
+    def _get_result_subdir(self, training=True):
+        result_subdir = None
+        if self.hps.general.warm_start and self.hps.general.resume_run_id is not None:
+            result_subdir = saver.locate_result_subdir(
+                self.hps.general.result_dir, self.hps.general.resume_run_id)
+
+        if training and result_subdir is None:
+            result_subdir = saver.create_result_subdir(
+                self.hps.general.result_dir,
+                desc=self.hps.experiment,
+                profile=self.hps,
+                copy=True)
+        return result_subdir
+
+    def _load_state(self, graph, result_subdir, training=True):
+        state = None
+        if self.hps.general.warm_start:
+            step_or_model_path = None
+            if os.path.exists(self.hps.general.pre_trained):
+                step_or_model_path = self.hps.general.pre_trained
+            elif self.hps.general.resume_step == 'best':
+                step_or_model_path = os.path.join(
+                    result_subdir, saver.get_best_model_name())
+            elif self.hps.general.resume_step == 'latest':
+                step_or_model_path = os.path.join(
+                    result_subdir, saver.get_latest_model_name(result_subdir))
+            elif self.hps.general.resume_step != '':
+                step_or_model_path = os.path.join(
+                    result_subdir,
+                    saver.get_model_name(int(self.hps.general.resume_step)))
+
+            if step_or_model_path is not None:
+                state = saver.load_snapshot(graph, step_or_model_path)
+                epoch = state['epoch']
+                self._print('Resume from step {}'.format(epoch))
+
+        if not training and state is None:
+            self._print('No pre-trained model for inference')
+
+        return state
