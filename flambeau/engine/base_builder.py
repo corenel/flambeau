@@ -47,8 +47,8 @@ def get_devices(devices):
         :rtype: int
         """
         origin = str(device)
-        if isinstance(device, str) and re.search('cuda:([\d]+)', device):
-            device = int(re.findall('cuda:([\d]+)', device)[0])
+        if isinstance(device, str) and re.search(r'cuda:([\d]+)', device):
+            device = int(re.findall(r'cuda:([\d]+)', device)[0])
         if isinstance(device, int):
             if 0 <= device <= torch.cuda.device_count() - 1:
                 return device

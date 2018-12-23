@@ -28,7 +28,7 @@ def create_result_subdir(result_dir, desc, profile, copy=False):
     run_id = 0
     for fname in glob.glob(os.path.join(result_dir, '*')):
         fbase = os.path.basename(fname)
-        finds = re.findall('^([\d]+)-', fbase)
+        finds = re.findall(r'^([\d]+)-', fbase)
         if len(finds) != 0:
             ford = int(finds[0])
             run_id = max(run_id, ford + 1)
@@ -133,8 +133,8 @@ def get_latest_model_name(result_subdir):
     latest = -1
     for f in os.listdir(result_subdir):
         if os.path.isfile(os.path.join(result_subdir, f)) and \
-                re.search('network-snapshot-([\d]+).pth', f):
-            f_step = int(re.findall('network-snapshot-([\d]+).pth', f)[0])
+                re.search(r'network-snapshot-([\d]+).pth', f):
+            f_step = int(re.findall(r'network-snapshot-([\d]+).pth', f)[0])
             if latest < f_step:
                 latest = f_step
 
