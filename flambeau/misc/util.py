@@ -1,7 +1,7 @@
-import glob
 import json
 import os
 import pickle
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -77,7 +77,8 @@ def load_profile(filepath,
     hps = None
     if os.path.exists(filepath):
         with open(filepath) as f:
-            hps = OrderedEasyDict(json.load(f, object_pairs_hook=OrderedDict))
+            hps = OrderedEasyDict(
+                json.load(f, object_pairs_hook=OrderedDict))
 
     manual_seed(hps.ablation.seed)
 

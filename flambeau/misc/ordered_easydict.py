@@ -26,4 +26,14 @@ class OrderedEasyDict(OrderedDict):
         super(OrderedEasyDict, self).__setattr__(name, value)
         super(OrderedEasyDict, self).__setitem__(name, value)
 
+    def update(self, e=None, **f):
+        d = e or dict()
+        d.update(f)
+        for k in d:
+            setattr(self, k, d[k])
+
+    def pop(self, k, d=None):
+        delattr(self, k)
+        return super(OrderedEasyDict, self).pop(k, d)
+
     __setitem__ = __setattr__
