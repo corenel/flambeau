@@ -1,0 +1,48 @@
+experiment: foo
+general:
+  result_dir: /Data/glow,
+  warm_start: false
+  pre_trained: null
+  resume_run_id: null,
+  resume_step: best,
+data:
+  problem: bar
+  root: /Data/bar
+  image_shape: [480, 640, 3]
+  input_shape: [224, 224, 3]
+  num_classes: 1
+  num_workers: 8
+  transforms:
+    train:
+      to_tensor: null
+    valid:
+      to_tensor: null
+  args: null
+optim:
+  num_epochs: 1000
+  interval:
+    scalar: 1
+    snapshot: 1
+    valid: 1
+    sample: 1
+  batch_size:
+    train: 64
+    eval: 4
+    minimum: 2
+    maximum: 256
+  optimizer:
+    name: adam
+    args:
+      betas: [0.9, 0.999]
+      eps: 1.0e-08
+      lr: 0.0001
+      weight_decay: 0
+  lr_scheduler:
+    args: {min_lr: 1.0e-06}
+    name: constant
+model: null
+ablation:
+  seed: 2384
+device:
+  graph: ['cuda:0']
+  data: ['cuda:0']

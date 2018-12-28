@@ -45,7 +45,7 @@ setup(
         'numpy', 'scipy',
         'torch', 'torchvision',
         'opencv-python', 'pillow',
-        'tqdm', 'tensorboardX'
+        'tqdm', 'tensorboardX', 'pyyaml'
     ],
     project_urls={
         'Bug Reports': 'https://github.com/corenel/flambeau/issues',

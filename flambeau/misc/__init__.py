@@ -1,1 +1,1 @@
-from .ordered_easydict import OrderedEasyDict
+from .config import OrderedEasyDict
