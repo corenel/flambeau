@@ -102,6 +102,13 @@ class BaseBuilder(BaseEngine):
         'step': lambda **kwargs: lr_scheduler.step_anneal(**kwargs),
         'cyclic_cosine': lambda **kwargs: lr_scheduler.cyclic_cosine_anneal(**kwargs),
     }
+    lr_scheduler_neo_dict = {
+        "constant_lr": ConstantLR,
+        "poly_lr": PolynomialLR,
+        "multi_step": MultiStepLR,
+        "cosine_annealing": CosineAnnealingLR,
+        "exp_lr": ExponentialLR,
+    }
 
     def __init__(self, hps, verbose=True):
         """
@@ -154,6 +161,32 @@ class BaseBuilder(BaseEngine):
             self._print('    {}: {}'.format(k, v), show_name=False)
 
         return optimizer
+
+    def _make_lr_scheduler_neo(self,
+                               model,
+                               optimizer,
+                               scheduler_name=None,
+                               scheduler_args=None):
+        """
+        Make learning rate scheduler
+
+        :param model: given model
+        :type model: torch.nn.Module
+        :param: optimzier for given model
+        :type: torch.optim.Optimizer
+        :param scheduler_name: name of lr scheduler
+        :type scheduler_name: str
+        :param scheduler_args: arguments of lr scheduler
+        :type scheduler_args: dict
+        :return: lr scheduler
+        :rtype: function
+        """
+        if scheduler_name is None:
+            scheduler_name = self.hps.optim.lr_scheduler.name.lower()
+        if scheduler_args is None:
+            scheduler_args = self.hps.optim.lr_scheduler.args.copy()
+        assert scheduler_name in self.lr_scheduler_dict.keys(), \
+            "Unsupported lr scheduler: {}".format(scheduler_name)
 
     def _make_lr_scheduler(self,
                            model,

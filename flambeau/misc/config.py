@@ -1,12 +1,12 @@
 import json
 import os
+import pprint
+import sys
 from collections import OrderedDict
 
 import numpy as np
 import torch
 import yaml
-import sys
-import pprint
 
 
 class OrderedEasyDict(OrderedDict):
