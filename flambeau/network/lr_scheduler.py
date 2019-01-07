@@ -100,7 +100,7 @@ class NoamLR(_LRScheduler):
         return [scale for _ in range(len(self.base_lrs))]
 
 
-class LinearAnnealingLR(_LRScheduler):
+class LinearLR(_LRScheduler):
     def __init__(self,
                  optimizer,
                  warmup_steps,
@@ -284,6 +284,6 @@ lr_scheduler_neo_dict = {
     'step': StepLR,
     'multi_step': MultiStepLR,
     'cosine': CosineAnnealingLR,
-    'linear': LinearAnnealingLR,
+    'linear': LinearLR,
     'exp': ExponentialLR,
 }

@@ -94,21 +94,6 @@ class BaseBuilder(BaseEngine):
         'adamw': lambda params, **kwargs: AdamW(params, **kwargs),
         'adamax': lambda params, **kwargs: torch.optim.Adamax(params, **kwargs)
     }
-    lr_scheduler_dict = {
-        'constant': lambda **kwargs: lr_scheduler.constant(**kwargs),
-        'noam': lambda **kwargs: lr_scheduler.noam_decay(**kwargs),
-        'noam_linear': lambda **kwargs: lr_scheduler.noam_linear(**kwargs),
-        'linear': lambda **kwargs: lr_scheduler.linear_anneal(**kwargs),
-        'step': lambda **kwargs: lr_scheduler.step_anneal(**kwargs),
-        'cyclic_cosine': lambda **kwargs: lr_scheduler.cyclic_cosine_anneal(**kwargs),
-    }
-    lr_scheduler_neo_dict = {
-        "constant_lr": ConstantLR,
-        "poly_lr": PolynomialLR,
-        "multi_step": MultiStepLR,
-        "cosine_annealing": CosineAnnealingLR,
-        "exp_lr": ExponentialLR,
-    }
 
     def __init__(self, hps, verbose=True):
         """
@@ -222,7 +207,7 @@ class BaseBuilder(BaseEngine):
         if 'warmup_epochs' in scheduler_args:
             del scheduler_args['warmup_epochs']
 
-        scheduler = partial(self.lr_scheduler_dict[scheduler_name],
+        scheduler = partial(lr_scheduler.lr_scheduler_dict[scheduler_name],
                             **scheduler_args)
 
         self._print('Use lr scheduler for {}: {}'.format(
