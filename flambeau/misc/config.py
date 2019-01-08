@@ -3,6 +3,7 @@ import os
 import pprint
 import sys
 from collections import OrderedDict
+from collections.abc import Mapping
 
 import numpy as np
 import torch
@@ -65,18 +66,13 @@ def load_profile(file_path,
     :return: hyper-parameters
     :rtype: OrderedEasyDict
     """
-    # check output directory
-    assert os.path.exists(file_path)
-    # check extension of profile file
-    file_type = os.path.splitext(file_path)[1]
-    assert file_type in ('.json', '.yml', '.yaml')
-    # load profile
-    with open(file_path) as f:
-        if file_type == '.json':
-            profile_dict = ordered_json_load(f)
-        else:
-            profile_dict = ordered_yaml_load(f, yaml.SafeLoader)
-        hps = OrderedEasyDict(profile_dict)
+    profile_dict = ordered_load(file_path)
+    if 'general' in profile_dict and \
+            'base' in profile_dict['general']:
+        base_profile_dict = ordered_load(profile_dict['general']['base'])
+        profile_dict = update_dict(base_profile_dict, profile_dict)
+
+    hps = OrderedEasyDict(profile_dict)
 
     # set random seed
     manual_seed(hps.ablation.seed)
@@ -147,6 +143,21 @@ def manual_seed(seed):
     # torch.cuda.manual_seed_all(seed)
 
 
+def ordered_load(file_path):
+    # check output directory
+    assert os.path.exists(file_path)
+    # check extension of profile file
+    file_type = os.path.splitext(file_path)[1]
+    assert file_type in ('.json', '.yml', '.yaml')
+    # load profile
+    with open(file_path) as f:
+        if file_type == '.json':
+            profile_dict = ordered_json_load(f)
+        else:
+            profile_dict = ordered_yaml_load(f, yaml.SafeLoader)
+    return profile_dict
+
+
 def ordered_yaml_load(stream,
                       loader=yaml.Loader,
                       object_pairs_hook=OrderedDict):
@@ -203,3 +214,12 @@ def ordered_json_load(fp):
 
 def to_ordered_dict(input_ordered_dict):
     return json.loads(json.dumps(input_ordered_dict), object_pairs_hook=OrderedDict)
+
+
+def update_dict(d, u):
+    for k, v in u.items():
+        if isinstance(v, Mapping):
+            d[k] = update_dict(d.get(k, {}), v)
+        else:
+            d[k] = v
+    return d
