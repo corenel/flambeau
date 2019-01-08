@@ -196,3 +196,63 @@ def load_snapshot(graph, pretrained_model):
     state = torch.load(pretrained_model)
     graph.load_state_dict(state['graph'])
     return state
+
+
+class Saver:
+
+    def __init__(self, hps, training=True):
+        super().__init__()
+        self.hps = hps
+        self.training = training
+        self.result_dir = hps.general.result_dir
+        self.result_subdir = self._init_subdir()
+
+    def load(self, graph):
+        state = None
+        if self.hps.general.warm_start:
+            step_or_model_path = None
+            if os.path.exists(self.hps.general.pre_trained):
+                step_or_model_path = self.hps.general.pre_trained
+            elif self.hps.general.resume_step == 'best':
+                step_or_model_path = os.path.join(
+                    self.result_subdir, get_best_model_name())
+            elif self.hps.general.resume_step == 'latest':
+                step_or_model_path = os.path.join(
+                    self.result_subdir, get_latest_model_name(self.result_subdir))
+            elif self.hps.general.resume_step != '':
+                step_or_model_path = os.path.join(
+                    self.result_subdir,
+                    get_model_name(int(self.hps.general.resume_step)))
+
+            if step_or_model_path is not None:
+                state = load_snapshot(graph, step_or_model_path)
+
+        return state
+
+    def save(self,
+             graph,
+             epoch,
+             model_name=None,
+             is_best=False,
+             state=None):
+        save_snapshot(graph=graph,
+                      epoch=epoch,
+                      result_subdir=self.result_subdir,
+                      model_name=model_name,
+                      is_best=is_best,
+                      state=state)
+
+    def _init_subdir(self):
+        result_subdir = None
+        # resume subdir by run id
+        if self.hps.general.warm_start and self.hps.general.resume_run_id is not None:
+            result_subdir = locate_result_subdir(
+                self.hps.general.result_dir, self.hps.general.resume_run_id)
+        # create subdir
+        if self.training and result_subdir is None:
+            result_subdir = create_result_subdir(
+                self.hps.general.result_dir,
+                desc=self.hps.experiment,
+                profile=self.hps,
+                copy=True)
+        return result_subdir

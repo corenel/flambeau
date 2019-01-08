@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 
 
-def _generate_transform(transform_dict):
+def generate_transform(transform_dict):
     transform_list = []
     for k, v in transform_dict.items():
         if k.lower() == 'resize':
@@ -42,7 +42,7 @@ def _generate_transform(transform_dict):
     return transforms.Compose(transform_list)
 
 
-def _make_data_loader(dataset, batch_size, shuffle=True, num_workers=8):
+def make_data_loader(dataset, batch_size, shuffle=True, num_workers=8):
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -77,10 +77,10 @@ class DatasetLoader:
         transform_dict = hps.dataset.transforms
         self.train_transforms = None
         if 'train' in transform_dict:
-            self.train_transforms = _generate_transform(
+            self.train_transforms = generate_transform(
                 hps.dataset.transforms.train)
         if 'valid' in transform_dict:
-            self.valid_transforms = _generate_transform(
+            self.valid_transforms = generate_transform(
                 hps.dataset.transforms.valid)
         else:
             self.valid_transforms = self.train_transforms
@@ -123,8 +123,8 @@ class DatasetLoader:
             if not get_loader:
                 return train_dataset, valid_dataset
             else:
-                train_data_loader = self.make_data_loader(train_dataset)
-                valid_data_loader = self.make_data_loader(valid_dataset)
+                train_data_loader = self._make_data_loader(train_dataset)
+                valid_data_loader = self._make_data_loader(valid_dataset)
                 return train_data_loader, valid_data_loader
         else:
             # get dataset
@@ -136,10 +136,10 @@ class DatasetLoader:
             if not get_loader:
                 return full_dataset
             else:
-                return self.make_data_loader(full_dataset)
+                return self._make_data_loader(full_dataset)
 
-    def make_data_loader(self, dataset):
-        return _make_data_loader(
+    def _make_data_loader(self, dataset):
+        return make_data_loader(
             dataset,
             batch_size=self.hps.optim.batch_size.train,
             num_workers=self.hps.dataset.num_workers)

@@ -70,24 +70,6 @@ def get_devices(devices):
     return devices
 
 
-def move_model_to_device(model, devices=('cpu',)):
-    """
-    Move model to correct devices
-
-    :param model: given model
-    :type model: torch.nn.Module
-    :param devices: list of available devices for model running
-    :type devices: list
-    :return: model in correct device
-    :rtype: torch.nn.Module
-    """
-    if 'cpu' in devices:
-        model = model.cpu()
-    else:
-        model = model.to(devices[0])
-    return model
-
-
 class BaseBuilder(BaseEngine):
     optimizer_dict = {
         'adam': lambda params, **kwargs: torch.optim.Adam(params, **kwargs),
@@ -268,3 +250,21 @@ class BaseBuilder(BaseEngine):
             self._print('No pre-trained model for inference')
 
         return state
+
+    @staticmethod
+    def _move_model_to_device(model, devices=('cpu',)):
+        """
+        Move model to correct devices
+
+        :param model: given model
+        :type model: torch.nn.Module
+        :param devices: list of available devices for model running
+        :type devices: list
+        :return: model in correct device
+        :rtype: torch.nn.Module
+        """
+        if 'cpu' in devices:
+            model = model.cpu()
+        else:
+            model = model.to(devices[0])
+        return model
