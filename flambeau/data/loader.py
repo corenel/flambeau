@@ -76,13 +76,17 @@ class DatasetLoader:
         # transform
         transform_dict = hps.dataset.transforms
         self.train_transforms = None
-        if 'train' in transform_dict:
-            self.train_transforms = generate_transform(
-                hps.dataset.transforms.train)
-        if 'valid' in transform_dict:
-            self.valid_transforms = generate_transform(
-                hps.dataset.transforms.valid)
+        if 'train' in transform_dict or 'valid' in transform_dict:
+            if 'train' in transform_dict:
+                self.train_transforms = generate_transform(
+                    hps.dataset.transforms.train)
+            if 'valid' in transform_dict:
+                self.valid_transforms = generate_transform(
+                    hps.dataset.transforms.valid)
+            else:
+                self.valid_transforms = self.train_transforms
         else:
+            self.train_transforms = generate_transform((hps.dataset.transforms))
             self.valid_transforms = self.train_transforms
 
         self.args = hps.dataset.args

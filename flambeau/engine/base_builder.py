@@ -178,7 +178,7 @@ class BaseBuilder(BaseEngine):
             scheduler_name = self.hps.optim.lr_scheduler.name.lower()
         if scheduler_args is None:
             scheduler_args = self.hps.optim.lr_scheduler.args.copy()
-        assert scheduler_name in self.lr_scheduler_dict.keys(), \
+        assert scheduler_name in lr_scheduler.lr_scheduler_dict.keys(), \
             "Unsupported lr scheduler: {}".format(scheduler_name)
 
         if 'base_lr' not in scheduler_args:
