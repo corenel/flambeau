@@ -7,6 +7,7 @@ import shutil
 import torch
 
 from .logger import set_output_log_file
+from .config import dump_profile
 
 
 def create_result_subdir(result_dir, desc, profile, copy=False):
@@ -18,7 +19,6 @@ def create_result_subdir(result_dir, desc, profile, copy=False):
     :param desc: description of current experiment
     :type desc: str
     :param profile: profile
-    :type profile: dict
     :param copy: whether or not to copy source code to the result subdir
     :type copy: bool
     :return: path to result sub-directory
@@ -42,11 +42,7 @@ def create_result_subdir(result_dir, desc, profile, copy=False):
     print('[Builder] Saving results to {}'.format(result_subdir))
 
     # export profile
-    with open(os.path.join(result_subdir, 'config.json'), 'w') as f:
-        json.dump(profile, f,
-                  sort_keys=True,
-                  indent=2,
-                  separators=(',', ': '))
+    dump_profile(profile, result_subdir, file_type='yml')
 
     # copy source code
     if copy:
