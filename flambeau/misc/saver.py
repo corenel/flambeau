@@ -162,7 +162,9 @@ def save_snapshot(graph,
     :param state: other state to save
     :type state: dict
     """
-    state_to_save = {'graph': graph.state_dict(), 'epoch': epoch}
+    state_to_save = {
+        'graph': graph.module.state_dict() if hasattr(graph, 'module') else graph.state_dict(),
+        'epoch': epoch}
     if state is not None:
         state_to_save.update(state)
 
