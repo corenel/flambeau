@@ -2,6 +2,7 @@ import json
 import os
 import pprint
 import sys
+import warnings
 from collections import OrderedDict
 from collections.abc import Mapping
 
@@ -75,7 +76,7 @@ def load_profile(file_path,
     hps = OrderedEasyDict(profile_dict)
 
     # set random seed
-    manual_seed(hps.ablation.seed)
+    manual_seed(hps.ablation.seed, hps.ablation.deterministic_cudnn)
 
     # override attributes with given arguments
     if snapshot is not None:
@@ -88,6 +89,16 @@ def load_profile(file_path,
     if gpu is not None:
         hps.device.graph = ['cuda:{}'.format(gpu)]
         hps.device.data = ['cuda:{}'.format(gpu)]
+        warnings.warn('You have chosen a specific GPU. This will completely '
+                      'disable data parallelism.')
+
+    # determine distributed training
+    if hps.device.distributed.enabled:
+        if hps.device.distributed.dist_url == "env://" and \
+                hps.device.distributed.world_size == -1:
+            hps.device.distributed.world_size = int(os.environ["WORLD_SIZE"])
+        hps.device.distributed.enabled = hps.device.distributed.world_size > 1 or \
+                                         hps.device.distributed.multiprocessing_distributed
 
     return hps
 
@@ -131,16 +142,25 @@ def print_profile(profile):
     pprint.pprint(profile)
 
 
-def manual_seed(seed):
+def manual_seed(seed, deterministic=False):
     """
     Set manual random seed
 
     :param seed: random seed
     :type seed: int
+    :param deterministic: whether or not to use deterministic cuDNN setting
+    :type deterministic: bool
     """
     np.random.seed(seed)
     torch.manual_seed(seed)
     # torch.cuda.manual_seed_all(seed)
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        warnings.warn('You have chosen to seed training. '
+                      'This will turn on the CUDNN deterministic setting, '
+                      'which can slow down your training considerably! '
+                      'You may see unexpected behavior when restarting '
+                      'from checkpoints.')
 
 
 def ordered_load(file_path):

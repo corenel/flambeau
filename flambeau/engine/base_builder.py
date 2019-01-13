@@ -4,10 +4,11 @@ from abc import abstractmethod
 from functools import partial
 
 import torch
-
+import torch.distributed as dist
 from flambeau.misc import saver
 from flambeau.network import lr_scheduler
 from flambeau.network.optimizer import AdamW
+
 from .base_engine import BaseEngine
 
 
@@ -77,7 +78,7 @@ class BaseBuilder(BaseEngine):
         'adamax': lambda params, **kwargs: torch.optim.Adamax(params, **kwargs)
     }
 
-    def __init__(self, hps, verbose=True):
+    def __init__(self, hps, gpu=None, ngpus_per_node=None, verbose=True):
         """
         Network builder
 
@@ -87,6 +88,26 @@ class BaseBuilder(BaseEngine):
         """
         super().__init__(verbose)
         self.hps = hps
+
+        # distributed training
+        self.distributed = hps.device.distributed.enabled
+        if isinstance(gpu, str) and re.search(r'cuda:([\d]+)', gpu):
+            gpu = int(re.findall(r'cuda:([\d]+)', gpu)[0])
+        self.given_gpu = gpu
+        self.ngpus_per_node = ngpus_per_node
+        if self.distributed:
+            hps.device.graph = [gpu]
+            hps.device.data = [gpu]
+            if hps.device.distributed.dist_url == "env://" and hps.device.distributed.rank == -1:
+                hps.device.distributed.rank = int(os.environ["RANK"])
+            if hps.device.distributed.multiprocessing_distributed:
+                # For multiprocessing distributed training, rank needs to be the
+                # global rank among all the processes
+                hps.device.distributed.rank = hps.device.distributed.rank * ngpus_per_node + gpu
+            dist.init_process_group(backend=hps.device.distributed.dist_backend,
+                                    init_method=hps.device.distributed.dist_url,
+                                    world_size=hps.device.distributed.world_size,
+                                    rank=hps.device.distributed.rank)
 
     @abstractmethod
     def build(self):
@@ -204,6 +225,9 @@ class BaseBuilder(BaseEngine):
         devices = get_devices(self.hps.device.graph)
         data_device = get_devices(self.hps.device.data)[0]
 
+        if 'cpu' in devices:
+            data_device = 'cpu'
+
         self._print('Use {} for model running and {} for data loading'.format(
             devices_to_string(devices),
             devices_to_string(data_device)))
@@ -251,8 +275,7 @@ class BaseBuilder(BaseEngine):
 
         return state
 
-    @staticmethod
-    def _move_model_to_device(model, devices=('cpu',)):
+    def _move_model_to_device(self, model, devices=('cpu',)):
         """
         Move model to correct devices
 
@@ -265,6 +288,50 @@ class BaseBuilder(BaseEngine):
         """
         if 'cpu' in devices:
             model = model.cpu()
+        elif self.distributed:
+            if self.given_gpu is not None:
+                # For multiprocessing distributed, DistributedDataParallel constructor
+                # should always set the single device scope, otherwise,
+                # DistributedDataParallel will use all available devices.
+                torch.cuda.set_device(self.given_gpu)
+                model.cuda(self.given_gpu)
+                model = torch.nn.parallel.DistributedDataParallel(
+                    module=model,
+                    device_ids=[self.given_gpu])
+            elif devices:
+                # Use specific gpu devices in DistributedDataParallel
+                model.cuda()
+                model = torch.nn.parallel.DistributedDataParallel(
+                    module=model,
+                    device_ids=devices)
+            else:
+                # DistributedDataParallel will divide and allocate batch_size to all
+                # available GPUs if device_ids are not set
+                model.cuda()
+                model = torch.nn.parallel.DistributedDataParallel(model)
+        elif self.given_gpu is not None:
+            # Use given single gpu in DataParallel
+            torch.cuda.set_device(self.given_gpu)
+            model = model.cuda(self.given_gpu)
+        elif devices:
+            # Use specific gpu devices in DataParallel
+            model.cuda()
+            model = torch.nn.parallel.DataParallel(
+                module=model,
+                device_ids=devices)
         else:
-            model = model.to(devices[0])
+            # DataParallel will divide and allocate batch_size to all available GPUs
+            model = torch.nn.DataParallel(model).cuda()
+
         return model
+
+    def _make_batch_size(self, training=True):
+        batch_size = self.hps.optim.batch_size.train if training else self.hps.optim.batch_size.eval
+        if self.distributed and self.given_gpu is not None:
+            # When using a single GPU per process and per
+            # DistributedDataParallel, we need to divide the batch size
+            # ourselves based on the total number of GPUs we have
+            batch_size = int(batch_size / self.ngpus_per_node)
+            self.hps.dataset.num_workers = int(self.hps.dataset.num_workers / self.ngpus_per_node)
+        self._print('Use batch size : {}'.format(batch_size))
+        return batch_size

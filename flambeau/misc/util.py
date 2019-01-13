@@ -33,5 +33,3 @@ def enable_cudnn_autotuner():
     Enable cuDNN auto-tuner to accelerate convolution
     """
     torch.backends.cudnn.benchmark = True
-
-
