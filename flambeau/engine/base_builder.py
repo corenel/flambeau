@@ -56,9 +56,10 @@ def get_devices(devices):
         print('[Builder] Incorrect device "{}"'.format(origin))
         return
 
-    use_cpu = any([d.find('cpu') >= 0 for d in devices])
+    use_cpu = any([d.find('cpu') >= 0 for d in devices if isinstance(d, str)])
     use_cuda = any(
-        [(d.find('cuda') >= 0 or isinstance(d, int)) for d in devices])
+        [isinstance(d, int) or (isinstance(d, str) and d.find('cuda') >= 0)
+         for d in devices])
     assert not (use_cpu and use_cuda), 'CPU and GPU cannot be mixed.'
 
     if use_cuda:
@@ -93,7 +94,7 @@ class BaseBuilder(BaseEngine):
         self.distributed = hps.device.distributed.enabled
         if isinstance(gpu, str) and re.search(r'cuda:([\d]+)', gpu):
             gpu = int(re.findall(r'cuda:([\d]+)', gpu)[0])
-        self.given_gpu = gpu
+        self.given_gpu_id = gpu
         self.ngpus_per_node = ngpus_per_node
         if self.distributed:
             hps.device.graph = [gpu]
@@ -289,15 +290,15 @@ class BaseBuilder(BaseEngine):
         if 'cpu' in devices:
             model = model.cpu()
         elif self.distributed:
-            if self.given_gpu is not None:
+            if self.given_gpu_id is not None:
                 # For multiprocessing distributed, DistributedDataParallel constructor
                 # should always set the single device scope, otherwise,
                 # DistributedDataParallel will use all available devices.
-                torch.cuda.set_device(self.given_gpu)
-                model.cuda(self.given_gpu)
+                torch.cuda.set_device(self.given_gpu_id)
+                model.cuda(self.given_gpu_id)
                 model = torch.nn.parallel.DistributedDataParallel(
                     module=model,
-                    device_ids=[self.given_gpu])
+                    device_ids=[self.given_gpu_id])
             elif devices:
                 # Use specific gpu devices in DistributedDataParallel
                 model.cuda()
@@ -309,10 +310,10 @@ class BaseBuilder(BaseEngine):
                 # available GPUs if device_ids are not set
                 model.cuda()
                 model = torch.nn.parallel.DistributedDataParallel(model)
-        elif self.given_gpu is not None:
+        elif self.given_gpu_id is not None:
             # Use given single gpu in DataParallel
-            torch.cuda.set_device(self.given_gpu)
-            model = model.cuda(self.given_gpu)
+            torch.cuda.set_device(self.given_gpu_id)
+            model = model.cuda(self.given_gpu_id)
         elif devices:
             # Use specific gpu devices in DataParallel
             model.cuda()
@@ -327,7 +328,7 @@ class BaseBuilder(BaseEngine):
 
     def _make_batch_size(self, training=True):
         batch_size = self.hps.optim.batch_size.train if training else self.hps.optim.batch_size.eval
-        if self.distributed and self.given_gpu is not None:
+        if self.distributed and self.given_gpu_id is not None:
             # When using a single GPU per process and per
             # DistributedDataParallel, we need to divide the batch size
             # ourselves based on the total number of GPUs we have
