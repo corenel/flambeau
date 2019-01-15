@@ -50,7 +50,9 @@ def load_profile(file_path,
                  data_root=None,
                  result_dir=None,
                  snapshot=None,
-                 gpu=None):
+                 gpu=None,
+                 dist_url=None,
+                 rank=None):
     """
     Load experiment profile as EasyDict
 
@@ -64,6 +66,10 @@ def load_profile(file_path,
     :type result_dir: str
     :param gpu: the id of gpu to use
     :type gpu: int
+    :param dist_url: url used to set up distributed training
+    :type dist_url: str
+    :param rank: node rank for distributed training
+    :type rank: int
     :return: hyper-parameters
     :rtype: OrderedEasyDict
     """
@@ -91,6 +97,10 @@ def load_profile(file_path,
         hps.device.data = ['cuda:{}'.format(gpu)]
         warnings.warn('You have chosen a specific GPU. This will completely '
                       'disable data parallelism.')
+    if dist_url is not None:
+        hps.device.distributed.dist_url = dist_url
+    if rank is not None:
+        hps.device.distributed.rank = rank
 
     # determine distributed training
     if hps.device.distributed.enabled:

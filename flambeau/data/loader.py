@@ -42,13 +42,21 @@ def generate_transform(transform_dict):
     return transforms.Compose(transform_list)
 
 
-def make_data_loader(dataset, batch_size, shuffle=True, num_workers=8):
-    return DataLoader(
+def make_data_loader(dataset, batch_size, shuffle=True, num_workers=8, distributed=False):
+
+    if distributed:
+        data_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+    else:
+        data_sampler = None
+
+    data_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
+        shuffle=(data_sampler is None),
         num_workers=num_workers,
-        pin_memory=True)
+        pin_memory=True,
+        sampler=data_sampler)
+    return data_loader
 
 
 class DatasetLoader:
@@ -146,4 +154,5 @@ class DatasetLoader:
         return make_data_loader(
             dataset,
             batch_size=self.hps.optim.batch_size.train,
-            num_workers=self.hps.dataset.num_workers)
+            num_workers=self.hps.dataset.num_workers,
+            distributed=self.hps.device.distributed.enabled)

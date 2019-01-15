@@ -47,6 +47,7 @@ class BaseTrainer(BaseEngine):
         # general
         self.hps = hps
         self.result_subdir = result_subdir
+        self.distributed = hps.device.distributed.enabled
 
         # state
         self.step = step
