@@ -6,8 +6,6 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Mapping
 
-import numpy as np
-import torch
 import yaml
 
 
@@ -50,9 +48,7 @@ def load_profile(file_path,
                  data_root=None,
                  result_dir=None,
                  snapshot=None,
-                 gpu=None,
-                 dist_url=None,
-                 rank=None):
+                 gpu=None):
     """
     Load experiment profile as EasyDict
 
@@ -66,10 +62,6 @@ def load_profile(file_path,
     :type result_dir: str
     :param gpu: the id of gpu to use
     :type gpu: int
-    :param dist_url: url used to set up distributed training
-    :type dist_url: str
-    :param rank: node rank for distributed training
-    :type rank: int
     :return: hyper-parameters
     :rtype: OrderedEasyDict
     """
@@ -80,9 +72,6 @@ def load_profile(file_path,
         profile_dict = update_dict(base_profile_dict, profile_dict)
 
     hps = OrderedEasyDict(profile_dict)
-
-    # set random seed
-    manual_seed(hps.ablation.seed, hps.ablation.deterministic_cudnn)
 
     # override attributes with given arguments
     if snapshot is not None:
@@ -97,18 +86,6 @@ def load_profile(file_path,
         hps.device.data = ['cuda:{}'.format(gpu)]
         warnings.warn('You have chosen a specific GPU. This will completely '
                       'disable data parallelism.')
-    if dist_url is not None:
-        hps.device.distributed.dist_url = dist_url
-    if rank is not None:
-        hps.device.distributed.rank = rank
-
-    # determine distributed training
-    if hps.device.distributed.enabled:
-        if hps.device.distributed.dist_url == "env://" and \
-                hps.device.distributed.world_size == -1:
-            hps.device.distributed.world_size = int(os.environ["WORLD_SIZE"])
-        hps.device.distributed.enabled = hps.device.distributed.world_size > 1 or \
-                                         hps.device.distributed.multiprocessing_distributed
 
     return hps
 
@@ -152,25 +129,6 @@ def print_profile(profile):
     pprint.pprint(profile)
 
 
-def manual_seed(seed, deterministic=False):
-    """
-    Set manual random seed
-
-    :param seed: random seed
-    :type seed: int
-    :param deterministic: whether or not to use deterministic cuDNN setting
-    :type deterministic: bool
-    """
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    # torch.cuda.manual_seed_all(seed)
-    if deterministic:
-        torch.backends.cudnn.deterministic = True
-        warnings.warn('You have chosen to seed training. '
-                      'This will turn on the CUDNN deterministic setting, '
-                      'which can slow down your training considerably! '
-                      'You may see unexpected behavior when restarting '
-                      'from checkpoints.')
 
 
 def ordered_load(file_path):

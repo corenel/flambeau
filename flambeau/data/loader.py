@@ -1,3 +1,4 @@
+import horovod.torch as hvd
 import torch
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
@@ -45,7 +46,10 @@ def generate_transform(transform_dict):
 def make_data_loader(dataset, batch_size, shuffle=True, num_workers=8, distributed=False):
 
     if distributed:
-        data_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+        # horovod: use DistributedSampler to partition data among workers.
+        # Manually specify `num_replicas=hvd.size()` and `rank=hvd.rank()`.
+        data_sampler = torch.utils.data.distributed.DistributedSampler(
+            dataset, num_replicas=hvd.size(), rank=hvd.rank())
     else:
         data_sampler = None
 

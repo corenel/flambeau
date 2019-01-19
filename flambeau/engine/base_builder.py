@@ -3,12 +3,13 @@ import re
 from abc import abstractmethod
 from functools import partial
 
+import horovod.torch as hvd
 import torch
-import torch.distributed as dist
+
 from flambeau.misc import saver
+from flambeau.misc.util import manual_seed
 from flambeau.network import lr_scheduler
 from flambeau.network.optimizer import AdamW
-
 from .base_engine import BaseEngine
 
 
@@ -79,7 +80,7 @@ class BaseBuilder(BaseEngine):
         'adamax': lambda params, **kwargs: torch.optim.Adamax(params, **kwargs)
     }
 
-    def __init__(self, hps, gpu=None, ngpus_per_node=None, verbose=True):
+    def __init__(self, hps, verbose=True):
         """
         Network builder
 
@@ -92,23 +93,14 @@ class BaseBuilder(BaseEngine):
 
         # distributed training
         self.distributed = hps.device.distributed.enabled
-        if isinstance(gpu, str) and re.search(r'cuda:([\d]+)', gpu):
-            gpu = int(re.findall(r'cuda:([\d]+)', gpu)[0])
-        self.given_gpu_id = gpu
-        self.ngpus_per_node = ngpus_per_node
         if self.distributed:
-            hps.device.graph = [gpu]
-            hps.device.data = [gpu]
-            if hps.device.distributed.dist_url == "env://" and hps.device.distributed.rank == -1:
-                hps.device.distributed.rank = int(os.environ["RANK"])
-            if hps.device.distributed.multiprocessing_distributed:
-                # For multiprocessing distributed training, rank needs to be the
-                # global rank among all the processes
-                hps.device.distributed.rank = hps.device.distributed.rank * ngpus_per_node + gpu
-            dist.init_process_group(backend=hps.device.distributed.dist_backend,
-                                    init_method=hps.device.distributed.dist_url,
-                                    world_size=hps.device.distributed.world_size,
-                                    rank=hps.device.distributed.rank)
+            # init horovod
+            hvd.init()
+            # horovod: print logs on the first worker.
+            self.verbose = 1 if hvd.rank() == 0 else 0
+
+        # set random seed
+        manual_seed(hps.ablation.seed, hps.ablation.deterministic_cudnn)
 
     @abstractmethod
     def build(self):
@@ -142,6 +134,14 @@ class BaseBuilder(BaseEngine):
         optimizer = self.optimizer_dict[optimizer_name](
             filter(lambda p: p.requires_grad, model.parameters()),
             **optimizer_args)
+
+        # (optional) compression algorithm.
+        compression = hvd.Compression.fp16 if self.hps.device.distributed.fp16_allreduce else hvd.Compression.none
+        if self.distributed:
+            optimizer = hvd.DistributedOptimizer(
+                optimizer, named_parameters=model.named_parameters(),
+                compression=compression,
+                backward_passes_per_step=self.hps.device.distributed.batches_per_allreduce)
 
         self._print('Use optimizer for {}: {}'.format(
             model.__class__.__name__,
@@ -223,11 +223,14 @@ class BaseBuilder(BaseEngine):
         return scheduler
 
     def _make_devices(self):
-        devices = get_devices(self.hps.device.graph)
-        data_device = get_devices(self.hps.device.data)[0]
-
-        if 'cpu' in devices:
-            data_device = 'cpu'
+        if not self.distributed:
+            devices = get_devices(self.hps.device.graph)
+            data_device = get_devices(self.hps.device.data)[0]
+            if 'cpu' in devices:
+                data_device = 'cpu'
+        else:
+            devices = [hvd.local_rank()]
+            data_device = hvd.local_rank()
 
         self._print('Use {} for model running and {} for data loading'.format(
             devices_to_string(devices),
@@ -249,9 +252,9 @@ class BaseBuilder(BaseEngine):
                 copy=True)
         return result_subdir
 
-    def _load_state(self, graph, result_subdir, training=True):
+    def _load_state(self, result_subdir, training=True, graph=None, optimizer=None):
         state = None
-        if self.hps.general.warm_start:
+        if self.hps.general.warm_start and (not self.distributed or hvd.rank() == 0):
             step_or_model_path = None
             if os.path.exists(self.hps.general.pre_trained):
                 step_or_model_path = self.hps.general.pre_trained
@@ -268,8 +271,14 @@ class BaseBuilder(BaseEngine):
 
             if step_or_model_path is not None:
                 state = saver.load_snapshot(graph, step_or_model_path)
-                epoch = state['epoch']
-                self._print('Resume from step {}'.format(epoch))
+                if graph is not None:
+                    graph.load_state_dict(state['graph'])
+                if optimizer is not None:
+                    optimizer.load_state_dict(state['optimizer'])
+                if 'step' in state:
+                    self._print('Resume from step {}'.format(state['step']))
+                if 'epoch' in state:
+                    self._print('Resume from epoch {}'.format(state['epoch']))
 
         if not training and state is None:
             self._print('No pre-trained model for inference')
@@ -290,30 +299,7 @@ class BaseBuilder(BaseEngine):
         if 'cpu' in devices:
             model = model.cpu()
         elif self.distributed:
-            if self.given_gpu_id is not None:
-                # For multiprocessing distributed, DistributedDataParallel constructor
-                # should always set the single device scope, otherwise,
-                # DistributedDataParallel will use all available devices.
-                torch.cuda.set_device(self.given_gpu_id)
-                model.cuda(self.given_gpu_id)
-                model = torch.nn.parallel.DistributedDataParallel(
-                    module=model,
-                    device_ids=[self.given_gpu_id])
-            elif devices:
-                # Use specific gpu devices in DistributedDataParallel
-                model.cuda()
-                model = torch.nn.parallel.DistributedDataParallel(
-                    module=model,
-                    device_ids=devices)
-            else:
-                # DistributedDataParallel will divide and allocate batch_size to all
-                # available GPUs if device_ids are not set
-                model.cuda()
-                model = torch.nn.parallel.DistributedDataParallel(model)
-        elif self.given_gpu_id is not None:
-            # Use given single gpu in DataParallel
-            torch.cuda.set_device(self.given_gpu_id)
-            model = model.cuda(self.given_gpu_id)
+            model.cuda()
         elif devices:
             # Use specific gpu devices in DataParallel
             model.cuda()
@@ -328,11 +314,23 @@ class BaseBuilder(BaseEngine):
 
     def _make_batch_size(self, training=True):
         batch_size = self.hps.optim.batch_size.train if training else self.hps.optim.batch_size.eval
-        if self.distributed and self.given_gpu_id is not None:
-            # When using a single GPU per process and per
-            # DistributedDataParallel, we need to divide the batch size
-            # ourselves based on the total number of GPUs we have
-            batch_size = int(batch_size / self.ngpus_per_node)
-            self.hps.dataset.num_workers = int(self.hps.dataset.num_workers / self.ngpus_per_node)
+        if self.distributed:
+            batch_size = batch_size * self.hps.device.distributed.batches_per_allreduce
         self._print('Use batch size : {}'.format(batch_size))
         return batch_size
+
+    @staticmethod
+    def _broadcast_state(graph, optimizer, step=None, epoch=None):
+        # broadcast parameters state.
+        hvd.broadcast_parameters(graph.state_dict(), root_rank=0)
+        # broadcast optimizer state.
+        hvd.broadcast_optimizer_state(optimizer, root_rank=0)
+        # broadcast resume_from_epoch from rank 0 (which will have
+        # checkpoints) to other ranks.
+        if step is not None:
+            step = hvd.broadcast(torch.tensor(step), root_rank=0,
+                                 name='resume_from_step').item()
+        if epoch is not None:
+            epoch = hvd.broadcast(torch.tensor(epoch), root_rank=0,
+                                  name='resume_from_epoch').item()
+        return step, epoch
