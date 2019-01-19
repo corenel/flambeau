@@ -49,9 +49,10 @@ class BaseTrainer(BaseEngine):
         self.hps = hps
         self.result_subdir = result_subdir
         self.distributed = hps.device.distributed.enabled
+        # horovod: print logs on the first worker.
         if self.distributed:
-            # horovod: print logs on the first worker.
-            self.verbose = 1 if hvd.rank() == 0 else 0
+            self.verbose = hvd.rank() == 0
+        self.is_output_rank = self.verbose
 
         # state
         self.step = step

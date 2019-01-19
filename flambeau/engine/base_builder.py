@@ -97,7 +97,8 @@ class BaseBuilder(BaseEngine):
             # init horovod
             hvd.init()
             # horovod: print logs on the first worker.
-            self.verbose = 1 if hvd.rank() == 0 else 0
+            self.verbose = hvd.rank() == 0
+        self.is_output_rank = self.verbose
 
         # set random seed
         manual_seed(hps.ablation.seed, hps.ablation.deterministic_cudnn)
@@ -254,7 +255,7 @@ class BaseBuilder(BaseEngine):
 
     def _load_state(self, result_subdir, training=True, graph=None, optimizer=None):
         state = None
-        if self.hps.general.warm_start and (not self.distributed or hvd.rank() == 0):
+        if self.hps.general.warm_start and self.is_output_rank:
             step_or_model_path = None
             if os.path.exists(self.hps.general.pre_trained):
                 step_or_model_path = self.hps.general.pre_trained
@@ -324,7 +325,8 @@ class BaseBuilder(BaseEngine):
         # broadcast parameters state.
         hvd.broadcast_parameters(graph.state_dict(), root_rank=0)
         # broadcast optimizer state.
-        hvd.broadcast_optimizer_state(optimizer, root_rank=0)
+        if optimizer is not None:
+            hvd.broadcast_optimizer_state(optimizer, root_rank=0)
         # broadcast resume_from_epoch from rank 0 (which will have
         # checkpoints) to other ranks.
         if step is not None:
