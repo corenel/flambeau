@@ -1,6 +1,7 @@
 import pickle
 import warnings
 
+import horovod.torch as hvd
 import numpy as np
 import torch
 
@@ -56,3 +57,38 @@ def manual_seed(seed, deterministic=False):
                       'which can slow down your training considerably! '
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
+
+
+class AverageMeter(object):
+    def __init__(self, name, distributed=False):
+        """
+        Computes and stores the average and current value
+
+        :param name:
+        :type name:
+        :param distributed:
+        :type distributed:
+        """
+        self.name = name
+        self.sum = torch.tensor(0.)
+        self.count = torch.tensor(0.)
+        self.distributed = distributed
+
+    def reset(self):
+        self.sum = torch.tensor(0.)
+        self.count = torch.tensor(0.)
+
+    def update(self, val):
+        if isinstance(val, float):
+            val = torch.tensor(val)
+        assert isinstance(val, torch.Tensor)
+        if self.distributed:
+            val = hvd.allreduce(val.detach().cpu(), name=self.name)
+        else:
+            val = val.detach().cpu()
+        self.sum += val
+        self.count += 1
+
+    @property
+    def avg(self):
+        return self.sum / self.count
