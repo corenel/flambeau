@@ -52,7 +52,6 @@ class BaseTrainer(BaseEngine):
         # horovod: print logs on the first worker.
         if self.distributed:
             self.verbose = hvd.rank() == 0
-        self.is_output_rank = self.verbose
 
         # state
         self.step = step
@@ -65,7 +64,9 @@ class BaseTrainer(BaseEngine):
         self.num_classes = self.hps.dataset.num_classes
 
         # logging
-        self.writer = SummaryWriter(log_dir=self.result_subdir)
+        self.is_output_rank = self.verbose
+        if self.is_output_rank:
+            self.writer = SummaryWriter(log_dir=self.result_subdir)
         self.interval_scalar = self.hps.optim.interval.scalar
         self.interval_snapshot = self.hps.optim.interval.snapshot
 
