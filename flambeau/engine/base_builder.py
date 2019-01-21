@@ -136,9 +136,10 @@ class BaseBuilder(BaseEngine):
             filter(lambda p: p.requires_grad, model.parameters()),
             **optimizer_args)
 
-        # (optional) compression algorithm.
-        compression = hvd.Compression.fp16 if self.hps.device.distributed.fp16_allreduce else hvd.Compression.none
         if self.distributed:
+            # (optional) compression algorithm.
+            compression = hvd.Compression.fp16 if self.hps.device.distributed.fp16_allreduce else hvd.Compression.none
+            # use distributed optimizer
             optimizer = hvd.DistributedOptimizer(
                 optimizer, named_parameters=model.named_parameters(),
                 compression=compression,
@@ -224,14 +225,14 @@ class BaseBuilder(BaseEngine):
         return scheduler
 
     def _make_devices(self):
-        if not self.distributed:
+        if self.distributed:
+            devices = [hvd.local_rank()]
+            data_device = hvd.local_rank()
+        else:
             devices = get_devices(self.hps.device.graph)
             data_device = get_devices(self.hps.device.data)[0]
             if 'cpu' in devices:
                 data_device = 'cpu'
-        else:
-            devices = [hvd.local_rank()]
-            data_device = hvd.local_rank()
 
         self._print('Use {} for model running and {} for data loading'.format(
             devices_to_string(devices),
@@ -297,6 +298,13 @@ class BaseBuilder(BaseEngine):
         :return: model in correct device
         :rtype: torch.nn.Module
         """
+        # horovod: pin GPU to local rank.
+        if 'cpu' not in devices:
+            if self.distributed:
+                torch.cuda.set_device(hvd.local_rank())
+            torch.cuda.manual_seed(self.hps.ablation.seed)
+
+        # move model to devices
         if 'cpu' in devices:
             model = model.cpu()
         elif self.distributed:
@@ -304,9 +312,10 @@ class BaseBuilder(BaseEngine):
         elif devices:
             # Use specific gpu devices in DataParallel
             model.cuda()
-            model = torch.nn.parallel.DataParallel(
-                module=model,
-                device_ids=devices)
+            if len(devices) > 1:
+                model = torch.nn.parallel.DataParallel(
+                    module=model,
+                    device_ids=devices)
         else:
             # DataParallel will divide and allocate batch_size to all available GPUs
             model = torch.nn.DataParallel(model).cuda()

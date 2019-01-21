@@ -2,9 +2,10 @@ import signal
 import sys
 
 import click
-import torch
-import torch.multiprocessing as mp
+
+from flambeau.data import DatasetLoader
 from flambeau.misc import config, logger
+from flambeau.engine import BaseBuilder, BaseTrainer
 
 
 @click.command(name='Training glow model')
@@ -13,28 +14,22 @@ from flambeau.misc import config, logger
 @click.option('--result-dir', type=click.Path(exists=True), default=None, help='root path of result directory')
 @click.option('--snapshot', type=click.Path(exists=True), default=None, help='path to snapshot file')
 @click.option('--gpu', type=int, default=None, help='desired gpu id')
-@click.option('--dist-url', type=str, default=None, help='url used to set up distributed training')
-@click.option('--rank', type=int, default=None, help='node rank for distributed training')
-def cli(profile, data_root, result_dir, snapshot, gpu, dist_url, rank):
+def cli(profile, data_root, result_dir, snapshot, gpu):
     # load hyper-parameters
     hps = config.load_profile(profile, data_root, result_dir, snapshot,
-                              gpu, dist_url, rank)
+                              gpu)
 
-    ngpus_per_node = torch.cuda.device_count()
-    if hps.device.distributed.multiprocessing_distributed:
-        # Since we have ngpus_per_node processes per node, the total world_size
-        # needs to be adjusted accordingly
-        hps.device.distributed.world_size = ngpus_per_node * hps.device.distributed.world_size
-        # Use torch.multiprocessing.spawn to launch distributed processes: the
-        # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, hps))
-    else:
-        # Simply call main_worker function
-        main_worker(hps.device.graph[0], ngpus_per_node, hps)
+    # load dataset
+    loader = DatasetLoader(hps)
+    dataset = loader.load()
 
+    # build graph
+    builder = BaseBuilder(hps)
+    state = builder.build(training=True)
+    trainer = BaseTrainer(hps=hps, dataset=dataset, **state)
 
-def main_worker(gpu, ngpus_per_node, hps):
-    pass
+    # train graph
+    trainer.train()
 
 
 if __name__ == '__main__':

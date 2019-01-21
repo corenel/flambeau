@@ -65,8 +65,8 @@ class BaseTrainer(BaseEngine):
 
         # logging
         self.is_output_rank = self.verbose
-        if self.is_output_rank:
-            self.writer = SummaryWriter(log_dir=self.result_subdir)
+
+        self.writer = SummaryWriter(log_dir=self.result_subdir) if self.is_output_rank else None
         self.interval_scalar = self.hps.optim.interval.scalar
         self.interval_snapshot = self.hps.optim.interval.snapshot
 
