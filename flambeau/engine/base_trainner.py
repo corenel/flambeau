@@ -1,5 +1,6 @@
 from abc import abstractmethod
 
+import horovod.torch as hvd
 from tensorboardX import SummaryWriter
 
 from .base_engine import BaseEngine
@@ -47,6 +48,10 @@ class BaseTrainer(BaseEngine):
         # general
         self.hps = hps
         self.result_subdir = result_subdir
+        self.distributed = hps.device.distributed.enabled
+        # horovod: print logs on the first worker.
+        if self.distributed:
+            self.verbose = hvd.rank() == 0
 
         # state
         self.step = step
@@ -59,7 +64,9 @@ class BaseTrainer(BaseEngine):
         self.num_classes = self.hps.dataset.num_classes
 
         # logging
-        self.writer = SummaryWriter(log_dir=self.result_subdir)
+        self.is_output_rank = self.verbose
+
+        self.writer = SummaryWriter(log_dir=self.result_subdir) if self.is_output_rank else None
         self.interval_scalar = self.hps.optim.interval.scalar
         self.interval_snapshot = self.hps.optim.interval.snapshot
 

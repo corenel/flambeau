@@ -3,9 +3,11 @@ import re
 from abc import abstractmethod
 from functools import partial
 
+import horovod.torch as hvd
 import torch
 
 from flambeau.misc import saver
+from flambeau.misc.util import manual_seed
 from flambeau.network import lr_scheduler
 from flambeau.network.optimizer import AdamW
 from .base_engine import BaseEngine
@@ -55,9 +57,10 @@ def get_devices(devices):
         print('[Builder] Incorrect device "{}"'.format(origin))
         return
 
-    use_cpu = any([d.find('cpu') >= 0 for d in devices])
+    use_cpu = any([d.find('cpu') >= 0 for d in devices if isinstance(d, str)])
     use_cuda = any(
-        [(d.find('cuda') >= 0 or isinstance(d, int)) for d in devices])
+        [isinstance(d, int) or (isinstance(d, str) and d.find('cuda') >= 0)
+         for d in devices])
     assert not (use_cpu and use_cuda), 'CPU and GPU cannot be mixed.'
 
     if use_cuda:
@@ -87,6 +90,18 @@ class BaseBuilder(BaseEngine):
         """
         super().__init__(verbose)
         self.hps = hps
+
+        # distributed training
+        self.distributed = hps.device.distributed.enabled
+        if self.distributed:
+            # init horovod
+            hvd.init()
+            # horovod: print logs on the first worker.
+            self.verbose = hvd.rank() == 0
+        self.is_output_rank = self.verbose
+
+        # set random seed
+        manual_seed(hps.ablation.seed, hps.ablation.deterministic_cudnn)
 
     @abstractmethod
     def build(self):
@@ -120,6 +135,15 @@ class BaseBuilder(BaseEngine):
         optimizer = self.optimizer_dict[optimizer_name](
             filter(lambda p: p.requires_grad, model.parameters()),
             **optimizer_args)
+
+        if self.distributed:
+            # (optional) compression algorithm.
+            compression = hvd.Compression.fp16 if self.hps.device.distributed.fp16_allreduce else hvd.Compression.none
+            # use distributed optimizer
+            optimizer = hvd.DistributedOptimizer(
+                optimizer, named_parameters=model.named_parameters(),
+                compression=compression,
+                backward_passes_per_step=self.hps.device.distributed.batches_per_allreduce)
 
         self._print('Use optimizer for {}: {}'.format(
             model.__class__.__name__,
@@ -201,8 +225,14 @@ class BaseBuilder(BaseEngine):
         return scheduler
 
     def _make_devices(self):
-        devices = get_devices(self.hps.device.graph)
-        data_device = get_devices(self.hps.device.data)[0]
+        if self.distributed:
+            devices = [hvd.local_rank()]
+            data_device = hvd.local_rank()
+        else:
+            devices = get_devices(self.hps.device.graph)
+            data_device = get_devices(self.hps.device.data)[0]
+            if 'cpu' in devices:
+                data_device = 'cpu'
 
         self._print('Use {} for model running and {} for data loading'.format(
             devices_to_string(devices),
@@ -224,9 +254,9 @@ class BaseBuilder(BaseEngine):
                 copy=True)
         return result_subdir
 
-    def _load_state(self, graph, result_subdir, training=True):
+    def _load_state(self, result_subdir, training=True, graph=None, optimizer=None):
         state = None
-        if self.hps.general.warm_start:
+        if self.hps.general.warm_start and self.is_output_rank:
             step_or_model_path = None
             if os.path.exists(self.hps.general.pre_trained):
                 step_or_model_path = self.hps.general.pre_trained
@@ -243,16 +273,21 @@ class BaseBuilder(BaseEngine):
 
             if step_or_model_path is not None:
                 state = saver.load_snapshot(graph, step_or_model_path)
-                epoch = state['epoch']
-                self._print('Resume from step {}'.format(epoch))
+                if graph is not None:
+                    graph.load_state_dict(state['graph'])
+                if optimizer is not None:
+                    optimizer.load_state_dict(state['optimizer'])
+                if 'step' in state:
+                    self._print('Resume from step {}'.format(state['step']))
+                if 'epoch' in state:
+                    self._print('Resume from epoch {}'.format(state['epoch']))
 
         if not training and state is None:
             self._print('No pre-trained model for inference')
 
         return state
 
-    @staticmethod
-    def _move_model_to_device(model, devices=('cpu',)):
+    def _move_model_to_device(self, model, devices=('cpu',)):
         """
         Move model to correct devices
 
@@ -263,8 +298,50 @@ class BaseBuilder(BaseEngine):
         :return: model in correct device
         :rtype: torch.nn.Module
         """
+        # horovod: pin GPU to local rank.
+        if 'cpu' not in devices:
+            if self.distributed:
+                torch.cuda.set_device(hvd.local_rank())
+            torch.cuda.manual_seed(self.hps.ablation.seed)
+
+        # move model to devices
         if 'cpu' in devices:
             model = model.cpu()
+        elif self.distributed:
+            model.cuda()
+        elif devices:
+            # Use specific gpu devices in DataParallel
+            model.cuda()
+            if len(devices) > 1:
+                model = torch.nn.parallel.DataParallel(
+                    module=model,
+                    device_ids=devices)
         else:
-            model = model.to(devices[0])
+            # DataParallel will divide and allocate batch_size to all available GPUs
+            model = torch.nn.DataParallel(model).cuda()
+
         return model
+
+    def _make_batch_size(self, training=True):
+        batch_size = self.hps.optim.batch_size.train if training else self.hps.optim.batch_size.eval
+        if self.distributed:
+            batch_size = batch_size * self.hps.device.distributed.batches_per_allreduce
+        self._print('Use batch size : {}'.format(batch_size))
+        return batch_size
+
+    @staticmethod
+    def _broadcast_state(graph, optimizer, step=None, epoch=None):
+        # broadcast parameters state.
+        hvd.broadcast_parameters(graph.state_dict(), root_rank=0)
+        # broadcast optimizer state.
+        if optimizer is not None:
+            hvd.broadcast_optimizer_state(optimizer, root_rank=0)
+        # broadcast resume_from_epoch from rank 0 (which will have
+        # checkpoints) to other ranks.
+        if step is not None:
+            step = hvd.broadcast(torch.tensor(step), root_rank=0,
+                                 name='resume_from_step').item()
+        if epoch is not None:
+            epoch = hvd.broadcast(torch.tensor(epoch), root_rank=0,
+                                  name='resume_from_epoch').item()
+        return step, epoch

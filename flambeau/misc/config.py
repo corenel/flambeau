@@ -2,11 +2,10 @@ import json
 import os
 import pprint
 import sys
+import warnings
 from collections import OrderedDict
 from collections.abc import Mapping
 
-import numpy as np
-import torch
 import yaml
 
 
@@ -74,9 +73,6 @@ def load_profile(file_path,
 
     hps = OrderedEasyDict(profile_dict)
 
-    # set random seed
-    manual_seed(hps.ablation.seed)
-
     # override attributes with given arguments
     if snapshot is not None:
         hps.general.pre_trained = snapshot
@@ -88,6 +84,8 @@ def load_profile(file_path,
     if gpu is not None:
         hps.device.graph = ['cuda:{}'.format(gpu)]
         hps.device.data = ['cuda:{}'.format(gpu)]
+        warnings.warn('You have chosen a specific GPU. This will completely '
+                      'disable data parallelism.')
 
     return hps
 
@@ -131,16 +129,6 @@ def print_profile(profile):
     pprint.pprint(profile)
 
 
-def manual_seed(seed):
-    """
-    Set manual random seed
-
-    :param seed: random seed
-    :type seed: int
-    """
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    # torch.cuda.manual_seed_all(seed)
 
 
 def ordered_load(file_path):
