@@ -93,10 +93,8 @@ class BaseBuilder(BaseEngine):
 
         # distributed training
         self.distributed = hps.device.distributed.enabled
+        # horovod: print logs on the first worker.
         if self.distributed:
-            # init horovod
-            hvd.init()
-            # horovod: print logs on the first worker.
             self.verbose = hvd.rank() == 0
         self.is_output_rank = self.verbose
 

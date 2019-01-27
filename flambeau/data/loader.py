@@ -2,6 +2,7 @@ import horovod.torch as hvd
 import torch
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
+from flambeau.engine import BaseEngine
 
 
 def generate_transform(transform_dict):
@@ -44,7 +45,6 @@ def generate_transform(transform_dict):
 
 
 def make_data_loader(dataset, batch_size, shuffle=True, num_workers=8, distributed=False):
-
     if distributed:
         # horovod: use DistributedSampler to partition data among workers.
         # Manually specify `num_replicas=hvd.size()` and `rank=hvd.rank()`.
@@ -63,7 +63,7 @@ def make_data_loader(dataset, batch_size, shuffle=True, num_workers=8, distribut
     return data_loader
 
 
-class DatasetLoader:
+class DatasetLoader(BaseEngine):
 
     def __init__(self, hps, dataset_dict=None):
         """
@@ -73,8 +73,14 @@ class DatasetLoader:
         :param dataset_dict: dict of custom dataset
         :type dataset_dict: dict
         """
+        super().__init__()
         # load profile
         self.hps = hps
+
+        # horovod: print logs on the first worker.
+        self.distributed = hps.device.distributed.enabled
+        if self.distributed:
+            self.verbose = hvd.rank() == 0
 
         # check support of dataset
         self.name = hps.dataset.problem.lower()
@@ -120,7 +126,7 @@ class DatasetLoader:
             # get dataset
             full_dataset = self.dataset_dict[self.name](
                 self.hps.dataset.root, **self.args)
-            print(full_dataset)
+            self._print(full_dataset)
 
             # split dataset
             sp = int(split_ratio * len(full_dataset))
@@ -130,10 +136,10 @@ class DatasetLoader:
             # apply transforms
             train_dataset.dataset.transform = self.train_transforms
             valid_dataset.dataset.transform = self.valid_transforms
-            print('[Dataset] Train transforms: ')
-            print('\t {}'.format(self.train_transforms.__repr__()))
-            print('[Dataset] Valid transforms: ')
-            print('\t {}'.format(self.valid_transforms.__repr__()))
+            self._print('[Dataset] Train transforms: ')
+            self._print('\t {}'.format(self.train_transforms.__repr__()))
+            self._print('[Dataset] Valid transforms: ')
+            self._print('\t {}'.format(self.valid_transforms.__repr__()))
 
             # get data loader
             if not get_loader:
@@ -148,7 +154,7 @@ class DatasetLoader:
                 self.hps.dataset.root,
                 transform=self.train_transforms,
                 **self.args)
-            print(full_dataset)
+            self._print(full_dataset)
             if not get_loader:
                 return full_dataset
             else:
