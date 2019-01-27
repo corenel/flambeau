@@ -59,7 +59,9 @@ def make_data_loader(dataset, batch_size, shuffle=True, num_workers=8, distribut
         shuffle=(data_sampler is None),
         num_workers=num_workers,
         pin_memory=True,
-        sampler=data_sampler)
+        sampler=data_sampler,
+        drop_last=True
+    )
     return data_loader
 
 
