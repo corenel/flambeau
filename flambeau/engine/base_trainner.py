@@ -24,7 +24,7 @@ def get_graph(graph):
 
 class BaseTrainer(BaseEngine):
     def __init__(self, hps, result_subdir,
-                 step, devices, data_device, batch_size,
+                 step, epoch, devices, data_device, batch_size,
                  verbose=True):
         """
         Network trainer
@@ -34,6 +34,8 @@ class BaseTrainer(BaseEngine):
         :type result_subdir: str
         :param step: global step of model
         :type step: int
+        :param epoch: global epoch of model
+        :type epoch: int
         :param devices: list of available devices for model running
         :type devices: list
         :param data_device: available device for data loading
@@ -55,6 +57,7 @@ class BaseTrainer(BaseEngine):
 
         # state
         self.step = step
+        self.epoch = epoch
         self.devices = devices
         self.num_device = len(devices)
 

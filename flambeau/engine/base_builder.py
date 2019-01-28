@@ -270,7 +270,7 @@ class BaseBuilder(BaseEngine):
                     saver.get_model_name(int(self.hps.general.resume_step)))
 
             if step_or_model_path is not None:
-                state = saver.load_snapshot(graph, step_or_model_path)
+                state = saver.load_snapshot(step_or_model_path)
                 if graph is not None:
                     graph.load_state_dict(state['graph'])
                 if optimizer is not None:

@@ -180,16 +180,16 @@ def save_snapshot(graph,
         shutil.copy(save_path, best_path)
 
 
-def load_snapshot(pretrained_model):
+def load_snapshot(model_path):
     """
     Load snapshot
 
-    :param pretrained_model: path to snapshot
-    :type pretrained_model: str
+    :param model_path: path to snapshot
+    :type model_path: str
     :return: built state
     :rtype: dict
     """
-    state = torch.load(pretrained_model)
+    state = torch.load(model_path)
     return state
 
 
