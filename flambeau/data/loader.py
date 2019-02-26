@@ -1,7 +1,9 @@
 import horovod.torch as hvd
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
+
 from flambeau.engine import BaseEngine
 
 
@@ -10,6 +12,8 @@ def generate_transform(transform_dict):
     for k, v in transform_dict.items():
         if k.lower() == 'resize':
             transform_list.append(transforms.Resize(v))
+        if k.lower() == 'resize_nearest':
+            transform_list.append(transforms.Resize(v, interpolation=Image.NEAREST))
         elif k.lower() == 'crop':
             transform_list.append(transforms.RandomCrop(v))
         elif k.lower() == 'resized_crop':
@@ -32,12 +36,18 @@ def generate_transform(transform_dict):
             if v is None:
                 norm_value = ([0.485, 0.456, 0.406],
                               [0.229, 0.224, 0.225])
-            else:
+            elif len(v) == 6:
                 assert len(v) == 6
                 norm_value = ([v[0], v[1], v[2]],
                               [v[3], v[4], v[5]])
+            elif len(v) == 2:
+                norm_value = ([v[0]],
+                              [v[1]])
+            else:
+                raise RuntimeError('Invalid arguments for normalize transform')
+
             transform_list.append(
-                transforms.Normalize(norm_value))
+                transforms.Normalize(mean=norm_value[0], std=norm_value[1]))
         else:
             print('Unsupported data transform type: {}'.format(k))
 
