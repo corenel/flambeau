@@ -272,7 +272,10 @@ class BaseBuilder(BaseEngine):
             if step_or_model_path is not None:
                 state = saver.load_snapshot(step_or_model_path)
                 if graph is not None:
-                    graph.load_state_dict(state['graph'])
+                    if hasattr(graph, 'module'):
+                        graph.module.load_state_dict(state['graph'])
+                    else:
+                        graph.load_state_dict(state['graph'])
                 if optimizer is not None:
                     optimizer.load_state_dict(state['optimizer'])
                 if 'step' in state:
