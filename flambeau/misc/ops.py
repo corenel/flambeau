@@ -167,6 +167,23 @@ def onehot(y, num_classes):
     return y_onehot
 
 
+def de_onehot(y_onehot):
+    """
+    Convert one-hot vector back to class label
+
+    :param y_onehot: one-hot label
+    :type y_onehot: torch.Tensor
+    :return: corresponding class
+    :rtype: int or Torch.Tensor
+    """
+    assert len(y_onehot.shape) in [1, 2], \
+        "Label y_onehot should be 1D or 2D vector"
+    if len(y_onehot.shape) == 1:
+        return torch.argmax(y_onehot)
+    else:
+        return torch.argmax(y_onehot, dim=1)
+
+
 def resize_feature_map(x, out_shape, interpolate_mode='nearest'):
     """
     Resize feature map into desired shape
