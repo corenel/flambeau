@@ -70,17 +70,17 @@ class AverageMeter(object):
         :type distributed:
         """
         self.name = name
-        self.sum = torch.tensor(0.)
-        self.count = torch.tensor(0.)
+        self.sum = torch.Tensor(0.)
+        self.count = torch.Tensor(0.)
         self.distributed = distributed
 
     def reset(self):
-        self.sum = torch.tensor(0.)
-        self.count = torch.tensor(0.)
+        self.sum = torch.Tensor(0.)
+        self.count = torch.Tensor(0.)
 
     def update(self, val):
         if isinstance(val, float):
-            val = torch.tensor(val)
+            val = torch.Tensor(val)
         assert isinstance(val, torch.Tensor)
         if self.distributed:
             val = hvd.allreduce(val.detach().cpu(), name=self.name)
@@ -92,3 +92,14 @@ class AverageMeter(object):
     @property
     def avg(self):
         return self.sum / self.count
+
+
+def init_linear(linear):
+    torch.nn.init.xavier_normal(linear.weight)
+    linear.bias.data.zero_()
+
+
+def init_conv(conv, glu=True):
+    torch.nn.init.kaiming_normal(conv.weight)
+    if conv.bias is not None:
+        conv.bias.data.zero_()
