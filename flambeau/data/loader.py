@@ -21,6 +21,9 @@ def generate_transform(transform_dict):
             h, w, min_scale = v
             transform_list.append(
                 transforms.RandomResizedCrop((h, w), (min_scale, 1.)))
+        elif k.lower() == 'center_crop':
+            transform_list.append(
+                transforms.CenterCrop(v))
         elif k.lower() == 'h_flip':
             transform_list.append(transforms.RandomHorizontalFlip())
         elif k.lower() == 'rotate':
