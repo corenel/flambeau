@@ -12,7 +12,7 @@ def generate_transform(transform_dict):
     for k, v in transform_dict.items():
         if k.lower() == 'resize':
             transform_list.append(transforms.Resize(v))
-        if k.lower() == 'resize_nearest':
+        elif k.lower() == 'resize_nearest':
             transform_list.append(transforms.Resize(v, interpolation=Image.NEAREST))
         elif k.lower() == 'crop':
             transform_list.append(transforms.RandomCrop(v))

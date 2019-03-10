@@ -70,17 +70,17 @@ class AverageMeter(object):
         :type distributed:
         """
         self.name = name
-        self.sum = torch.Tensor(0.)
-        self.count = torch.Tensor(0.)
+        self.sum = torch.tensor(0.)
+        self.count = torch.tensor(0.)
         self.distributed = distributed
 
     def reset(self):
-        self.sum = torch.Tensor(0.)
-        self.count = torch.Tensor(0.)
+        self.sum = torch.tensor(0.)
+        self.count = torch.tensor(0.)
 
     def update(self, val):
         if isinstance(val, float):
-            val = torch.Tensor(val)
+            val = torch.tensor(val)
         assert isinstance(val, torch.Tensor)
         if self.distributed:
             val = hvd.allreduce(val.detach().cpu(), name=self.name)
