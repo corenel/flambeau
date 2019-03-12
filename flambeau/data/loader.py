@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 
 from flambeau.engine import BaseEngine
+from . import transforms as custom_transforms
 
 
 def generate_transform(transform_dict):
@@ -24,6 +25,9 @@ def generate_transform(transform_dict):
         elif k.lower() == 'center_crop':
             transform_list.append(
                 transforms.CenterCrop(v))
+        elif k.lower() == 'center_resize':
+            transform_list.append(
+                custom_transforms.CenterResize(v))
         elif k.lower() == 'h_flip':
             transform_list.append(transforms.RandomHorizontalFlip())
         elif k.lower() == 'rotate':

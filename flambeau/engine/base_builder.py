@@ -9,7 +9,7 @@ import torch
 from flambeau.misc import saver
 from flambeau.misc.util import manual_seed
 from flambeau.network import lr_scheduler
-from flambeau.network.optimizer import AdamW
+from flambeau.network.optimizer import AdamW, AdaBound, AdaBoundW
 from .base_engine import BaseEngine
 
 
@@ -77,6 +77,8 @@ class BaseBuilder(BaseEngine):
     optimizer_dict = {
         'adam': lambda params, **kwargs: torch.optim.Adam(params, **kwargs),
         'adamw': lambda params, **kwargs: AdamW(params, **kwargs),
+        'adam_bound': lambda params, **kwargs: AdaBound(params, **kwargs),
+        'adam_bound_w': lambda params, **kwargs: AdaBoundW(params, **kwargs),
         'adamax': lambda params, **kwargs: torch.optim.Adamax(params, **kwargs)
     }
 
