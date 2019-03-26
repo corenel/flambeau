@@ -127,7 +127,10 @@ class DatasetLoader(BaseEngine):
                 self.train_transforms = generate_transform((hps.dataset.transforms))
                 self.valid_transforms = self.train_transforms
 
-        self.args = hps.dataset.args
+        if hasattr(hps.dataset, 'args'):
+            self.args = hps.dataset.args
+        else:
+            self.args = {}
 
     def load(self, split=False, split_ratio=0.8, get_loader=False):
         """
