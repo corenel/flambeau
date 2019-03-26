@@ -326,8 +326,8 @@ class BaseBuilder(BaseEngine):
 
     def _make_batch_size(self, training=True):
         batch_size = self.hps.optim.batch_size.train if training else self.hps.optim.batch_size.eval
-        if self.distributed:
-            batch_size = batch_size * self.hps.device.distributed.batches_per_allreduce
+        # if self.distributed:
+        #     batch_size = batch_size * self.hps.device.distributed.batches_per_allreduce
         self._print('Use batch size : {}'.format(batch_size))
         return batch_size
 
