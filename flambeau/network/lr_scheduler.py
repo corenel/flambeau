@@ -200,6 +200,25 @@ def noam_decay(base_lr, global_step, warmup_steps=4000, min_lr=1e-4):
     return lr
 
 
+def openai(base_lr, num_processed_images, num_epochs, num_warmup_epochs):
+    """
+    Learning rate scheduling strategy from openai/glow
+
+    :param base_lr: base learning rate
+    :type base_lr: float
+    :param num_processed_images: number of processed images
+    :type num_processed_images: int
+    :param num_epochs: number of total epochs to train
+    :type num_epochs: int
+    :param num_warmup_epochs: number of epochs to warm up
+    :type num_warmup_epochs: int
+    :return: scheduled learning rate
+    :rtype: float
+    """
+    lr = base_lr * min(1., num_processed_images / (num_epochs * num_warmup_epochs))
+    return lr
+
+
 def linear_anneal(base_lr, global_step, warmup_steps, min_lr):
     """
     Linearly annealed learning rate from 0 in the first warming up epochs.
@@ -272,6 +291,7 @@ lr_scheduler_dict = {
     'constant': lambda **kwargs: constant(**kwargs),
     'noam': lambda **kwargs: noam_decay(**kwargs),
     'noam_linear': lambda **kwargs: noam_linear(**kwargs),
+    'openai': lambda **kwargs: openai(**kwargs),
     'linear': lambda **kwargs: linear_anneal(**kwargs),
     'step': lambda **kwargs: step_anneal(**kwargs),
     'cyclic_cosine': lambda **kwargs: cyclic_cosine_anneal(**kwargs),
