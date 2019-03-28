@@ -75,6 +75,7 @@ def get_devices(devices):
 
 class BaseBuilder(BaseEngine):
     optimizer_dict = {
+        'sgd': lambda params, **kwargs: torch.optim.SGD(params, **kwargs),
         'adam': lambda params, **kwargs: torch.optim.Adam(params, **kwargs),
         'adamw': lambda params, **kwargs: AdamW(params, **kwargs),
         'adam_bound': lambda params, **kwargs: AdaBound(params, **kwargs),
