@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import datetime
 
 import torch
 
@@ -34,8 +35,9 @@ def create_result_subdir(result_dir, desc, profile, copy=False):
             run_id = max(run_id, ford + 1)
 
     # create result sub-directory
-    result_subdir = os.path.join(result_dir, '{:03d}-{:s}'.format(
-        run_id, desc))
+    curr_date = '{0:%Y%m%d%H%M%S}'.format(datetime.datetime.now())
+    result_subdir = os.path.join(result_dir, '{:03d}-{:s}-{:s}'.format(
+        run_id, desc, curr_date))
     if not os.path.exists(result_subdir):
         os.makedirs(result_subdir)
     set_output_log_file(os.path.join(result_subdir, 'log.txt'))
