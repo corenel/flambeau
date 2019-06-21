@@ -255,7 +255,7 @@ class BaseBuilder(BaseEngine):
                 copy=True)
         return result_subdir
 
-    def _load_state(self, result_subdir, training=True, graph=None, optimizer=None):
+    def _load_state(self, result_subdir, training=True, graph=None, optimizer=None, graph_ema=None):
         state = None
         if self.hps.general.warm_start and self.is_output_rank:
             step_or_model_path = None
@@ -278,6 +278,10 @@ class BaseBuilder(BaseEngine):
                     if hasattr(graph, 'module'):
                         state['graph'] = {'module.' + k: v for k, v in state['graph'].items()}
                     graph.load_state_dict(state['graph'])
+                if graph_ema is not None:
+                    if hasattr(graph_ema, 'module'):
+                        state['graph_ems'] = {'module.' + k: v for k, v in state['graph_ema'].items()}
+                    graph_ema.load_state_dict(state['graph_ema'])
                 if optimizer is not None:
                     optimizer.load_state_dict(state['optimizer'])
                 if 'step' in state:
@@ -333,9 +337,11 @@ class BaseBuilder(BaseEngine):
         return batch_size
 
     @staticmethod
-    def _broadcast_state(graph, optimizer, step=None, epoch=None):
+    def _broadcast_state(graph, optimizer, step=None, epoch=None, graph_ema=None):
         # broadcast parameters state.
         hvd.broadcast_parameters(graph.state_dict(), root_rank=0)
+        if graph_ema is not None:
+            hvd.broadcast_parameters(graph_ema.state_dict(), root_rank=0)
         # broadcast optimizer state.
         if optimizer is not None:
             hvd.broadcast_optimizer_state(optimizer, root_rank=0)

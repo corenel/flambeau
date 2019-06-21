@@ -145,6 +145,7 @@ def get_latest_model_name(result_subdir):
 def save_snapshot(graph,
                   epoch,
                   result_subdir,
+                  graph_ema=None,
                   model_name=None,
                   is_best=False,
                   state=None):
@@ -170,6 +171,9 @@ def save_snapshot(graph,
     }
     if state is not None:
         state_to_save.update(state)
+    if graph_ema is not None:
+        state_to_save['graph_ema'] = \
+            graph_ema.module.state_dict() if hasattr(graph_ema, 'module') else graph_ema.state_dict()
 
     # save current state
     if model_name is None:
