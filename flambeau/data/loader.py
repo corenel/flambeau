@@ -28,6 +28,9 @@ def generate_transform(transform_dict):
         elif k.lower() == 'center_resize':
             transform_list.append(
                 custom_transforms.CenterResize(v))
+        elif k.lower() == 'resize_center':
+            transform_list.append(
+                custom_transforms.CenterResize(v, resize_first=True))
         elif k.lower() == 'h_flip':
             transform_list.append(transforms.RandomHorizontalFlip())
         elif k.lower() == 'rotate':
@@ -147,8 +150,12 @@ class DatasetLoader(BaseEngine):
         """
         if split:
             # get dataset
-            full_dataset = self.dataset_dict[self.name](
-                self.hps.dataset.root, **self.args)
+            if self.args is not None:
+                full_dataset = self.dataset_dict[self.name](
+                    self.hps.dataset.root, **self.args)
+            else:
+                full_dataset = self.dataset_dict[self.name](
+                    self.hps.dataset.root)
             self._print(full_dataset)
 
             # split dataset
@@ -173,10 +180,15 @@ class DatasetLoader(BaseEngine):
                 return train_data_loader, valid_data_loader
         else:
             # get dataset
-            full_dataset = self.dataset_dict[self.name](
-                self.hps.dataset.root,
-                transform=self.train_transforms,
-                **self.args)
+            if self.args is not None:
+                full_dataset = self.dataset_dict[self.name](
+                    self.hps.dataset.root,
+                    transform=self.train_transforms,
+                    **self.args)
+            else:
+                full_dataset = self.dataset_dict[self.name](
+                    self.hps.dataset.root,
+                    transform=self.train_transforms)
             self._print(full_dataset)
             if not get_loader:
                 return full_dataset
