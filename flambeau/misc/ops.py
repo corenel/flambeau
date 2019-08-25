@@ -159,7 +159,7 @@ def onehot(y, num_classes):
     :rtype: torch.Tensor
     """
     assert len(y.shape) in [1, 2], "Label y should be 1D or 2D vector"
-    y_onehot = torch.zeros(y.shape[0], num_classes).to(y.device)
+    y_onehot = torch.zeros(y.shape[0], num_classes).to(y.device, non_blocking=True)
     if len(y.shape) == 1:
         y_onehot = y_onehot.scatter_(1, y.unsqueeze(-1), 1)
     else:

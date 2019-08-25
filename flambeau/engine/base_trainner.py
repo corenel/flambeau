@@ -1,5 +1,8 @@
+import collections
+import os
 from abc import abstractmethod
 
+from comet_ml import Experiment
 import horovod.torch as hvd
 from tensorboardX import SummaryWriter
 
@@ -22,9 +25,26 @@ def get_graph(graph):
         return graph
 
 
+def flatten_dict(d, parent_key='', sep='-'):
+    items = []
+    for k, v in d.items():
+        new_key = parent_key + sep + k if parent_key else k
+        if isinstance(v, collections.MutableMapping):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+
 class BaseTrainer(BaseEngine):
-    def __init__(self, hps, result_subdir,
-                 step, epoch, devices, data_device, batch_size,
+    def __init__(self,
+                 hps,
+                 result_subdir,
+                 step,
+                 epoch,
+                 devices,
+                 data_device,
+                 batch_size,
                  verbose=True):
         """
         Network trainer
@@ -68,11 +88,37 @@ class BaseTrainer(BaseEngine):
 
         # logging
         self.is_output_rank = self.verbose
-
-        self.writer = SummaryWriter(logdir=self.result_subdir) if self.is_output_rank else None
-        self.interval_scalar = self.hps.optim.interval.scalar
-        self.interval_snapshot = self.hps.optim.interval.snapshot
+        if hps.logging.tensorboard.enabled:
+            self.writer = SummaryWriter(
+                logdir=self.result_subdir) if self.is_output_rank else None
+        if hps.logging.comet.enabled:
+            self.experiment = Experiment(
+                project_name=hps.logging.comet.project_name,
+                workspace=hps.logging.comet.workspace
+            ) if self.is_output_rank else None
+            if self.is_output_rank and self.experiment.alive is False:
+                raise RuntimeError('Something went wrong w/ comet.ml')
+        self.log_profile(self.hps)
+        self.interval_scalar = self.hps.logging.interval.scalar
+        self.interval_snapshot = self.hps.logging.interval.snapshot
 
     @abstractmethod
     def train(self):
         pass
+
+    def log_profile(self, hps):
+        self.experiment.log_parameters(flatten_dict(hps))
+        self.experiment.log_parameter('general-result_subdir',
+                                      self.result_subdir)
+
+    def log_scalar(self, name, value, step):
+        if self.hps.logging.tensorboard.enabled:
+            self.writer.add_scalar(name, value, step)
+        if self.hps.logging.comet.enabled:
+            self.experiment.log_metric(name, value, step)
+
+    def log_close(self):
+        if self.hps.logging.tensorboard.enabled:
+            self.writer.export_scalars_to_json(
+                os.path.join(self.result_subdir, 'all_scalars.json'))
+            self.writer.close()
