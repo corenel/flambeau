@@ -43,7 +43,7 @@ setup(
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=[
         'numpy', 'scipy',
-        'torch==1.1.0', 'torchvision==0.2.2.post3',
+        'torch', 'torchvision',
         'opencv-python', 'pillow',
         'tqdm', 'tensorboardX', 'pyyaml'
     ],
