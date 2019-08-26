@@ -107,18 +107,23 @@ class BaseTrainer(BaseEngine):
         pass
 
     def log_profile(self, hps):
-        self.experiment.log_parameters(flatten_dict(hps))
-        self.experiment.log_parameter('general-result_subdir',
-                                      self.result_subdir)
+        if self.hps.logging.comet.enabled and self.is_output_rank:
+            self.experiment.log_parameters(flatten_dict(hps))
+            self.experiment.log_parameter('general-result_subdir',
+                                          self.result_subdir)
+            self.experiment.set_name(
+                self.result_subdir.replace(self.hps.general.result_dir + '/',
+                                           ''))
 
     def log_scalar(self, name, value, step):
-        if self.hps.logging.tensorboard.enabled:
-            self.writer.add_scalar(name, value, step)
-        if self.hps.logging.comet.enabled:
-            self.experiment.log_metric(name, value, step)
+        if self.is_output_rank:
+            if self.hps.logging.tensorboard.enabled:
+                self.writer.add_scalar(name, value, step)
+            if self.hps.logging.comet.enabled:
+                self.experiment.log_metric(name, value, step)
 
     def log_close(self):
-        if self.hps.logging.tensorboard.enabled:
+        if self.hps.logging.tensorboard.enabled and self.is_output_rank:
             self.writer.export_scalars_to_json(
                 os.path.join(self.result_subdir, 'all_scalars.json'))
             self.writer.close()

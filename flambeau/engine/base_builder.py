@@ -318,14 +318,15 @@ class BaseBuilder(BaseEngine):
             model.cuda()
         elif devices:
             # Use specific gpu devices in DataParallel
-            model.cuda()
             if len(devices) > 1:
                 model = torch.nn.parallel.DataParallel(
                     module=model,
                     device_ids=devices)
+            else:
+                model.cuda()
         else:
             # DataParallel will divide and allocate batch_size to all available GPUs
-            model = torch.nn.DataParallel(model).cuda()
+            model = torch.nn.DataParallel(model)
 
         return model
 
