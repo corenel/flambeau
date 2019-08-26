@@ -112,8 +112,10 @@ class BaseTrainer(BaseEngine):
             self.experiment.log_parameter('general-result_subdir',
                                           self.result_subdir)
             self.experiment.set_name(
-                self.result_subdir.replace(self.hps.general.result_dir + '/',
-                                           ''))
+                self.result_subdir.replace(
+                    self.hps.general.result_dir
+                    if self.hps.general.result_dir.endswith('/') else
+                    self.hps.general.result_dir + '/', ''))
 
     def log_scalar(self, name, value, step):
         if self.is_output_rank:
