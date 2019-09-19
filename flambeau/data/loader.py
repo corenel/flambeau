@@ -3,9 +3,15 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
+from prefetch_generator import BackgroundGenerator
 
 from flambeau.engine import BaseEngine
 from . import transforms as custom_transforms
+
+
+class DataLoaderX(torch.utils.data.DataLoader):
+    def __iter__(self):
+        return BackgroundGenerator(super().__iter__())
 
 
 def generate_transform(transform_dict):
@@ -73,7 +79,11 @@ def make_data_loader(dataset, batch_size, shuffle=True, num_workers=8, distribut
     else:
         data_sampler = None
 
-    data_loader = torch.utils.data.DataLoader(
+    use_prefetch_generator = True
+
+    dataloader_cls = torch.utils.data.DataLoader if not use_prefetch_generator else DataLoaderX
+
+    data_loader = dataloader_cls(
         dataset,
         batch_size=batch_size,
         shuffle=(data_sampler is None),
