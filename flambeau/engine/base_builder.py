@@ -102,7 +102,8 @@ class BaseBuilder(BaseEngine):
         self.is_output_rank = self.verbose
 
         # set random seed
-        manual_seed(hps.ablation.seed, hps.ablation.deterministic_cudnn)
+        if hps.ablation.seed is not None:
+            manual_seed(hps.ablation.seed, hps.ablation.deterministic_cudnn)
 
     @abstractmethod
     def build(self):
@@ -110,7 +111,8 @@ class BaseBuilder(BaseEngine):
 
     def _make_optimizer(self, model,
                         optimizer_name=None,
-                        optimizer_args=None):
+                        optimizer_args=None,
+                        no_accumulate=False):
         """
         Make optimizer for parameters of given model
 
@@ -144,7 +146,7 @@ class BaseBuilder(BaseEngine):
             optimizer = hvd.DistributedOptimizer(
                 optimizer, named_parameters=model.named_parameters(),
                 compression=compression,
-                backward_passes_per_step=self.hps.device.distributed.batches_per_allreduce)
+                backward_passes_per_step=self.hps.device.distributed.batches_per_allreduce if not no_accumulate else 1)
 
         self._print('Use optimizer for {}: {}'.format(
             model.__class__.__name__,
@@ -184,7 +186,8 @@ class BaseBuilder(BaseEngine):
                            model,
                            scheduler_name=None,
                            scheduler_args=None,
-                           base_lr=None):
+                           base_lr=None,
+                           scale=1.0):
         """
         Make learning rate scheduler
 
@@ -208,9 +211,9 @@ class BaseBuilder(BaseEngine):
 
         if 'base_lr' not in scheduler_args:
             if base_lr is not None:
-                scheduler_args['base_lr'] = base_lr
+                scheduler_args['base_lr'] = base_lr * scale
             else:
-                scheduler_args['base_lr'] = self.hps.optim.optimizer.args['lr']
+                scheduler_args['base_lr'] = self.hps.optim.optimizer.args['lr'] * scale
         if 'warmup_epochs' in scheduler_args:
             del scheduler_args['warmup_epochs']
 
@@ -309,7 +312,12 @@ class BaseBuilder(BaseEngine):
         if 'cpu' not in devices:
             if self.distributed:
                 torch.cuda.set_device(hvd.local_rank())
-            torch.cuda.manual_seed(self.hps.ablation.seed)
+            if self.hps.ablation.seed is None:
+                pass
+            elif len(devices)> 1:
+                torch.cuda.manual_seed_all(self.hps.ablation.seed)
+            else:
+                torch.cuda.manual_seed(self.hps.ablation.seed)
 
         # move model to devices
         if 'cpu' in devices:
@@ -319,7 +327,8 @@ class BaseBuilder(BaseEngine):
         elif devices:
             # Use specific gpu devices in DataParallel
             if len(devices) > 1:
-                model = torch.nn.parallel.DataParallel(
+                model.cuda()
+                model = torch.nn.DataParallel(
                     module=model,
                     device_ids=devices)
             else:

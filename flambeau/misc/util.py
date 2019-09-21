@@ -91,6 +91,8 @@ class AverageMeter(object):
 
     @property
     def avg(self):
+        if np.isnan(self.sum / self.count):
+            self.reset()
         return self.sum / self.count
 
 

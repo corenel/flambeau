@@ -200,6 +200,13 @@ def noam_decay(base_lr, global_step, warmup_steps=4000, min_lr=1e-4):
     return lr
 
 
+def linear_warmup(base_lr, curr_epoch, warmup_epochs=2, decay_epochs=5, total_epochs=10):
+    if curr_epoch <= warmup_epochs:
+        return base_lr * min(1., curr_epoch / warmup_epochs)
+    elif curr_epoch >= decay_epochs:
+        return base_lr * max(0., 1 - (curr_epoch - decay_epochs) / (total_epochs - decay_epochs))
+
+
 def openai(base_lr, num_processed_images, num_epochs, num_warmup_epochs):
     """
     Learning rate scheduling strategy from openai/glow
@@ -291,6 +298,7 @@ lr_scheduler_dict = {
     'constant': lambda **kwargs: constant(**kwargs),
     'noam': lambda **kwargs: noam_decay(**kwargs),
     'noam_linear': lambda **kwargs: noam_linear(**kwargs),
+    'linear_warmup': lambda **kwargs: linear_warmup(**kwargs),
     'openai': lambda **kwargs: openai(**kwargs),
     'linear': lambda **kwargs: linear_anneal(**kwargs),
     'step': lambda **kwargs: step_anneal(**kwargs),
